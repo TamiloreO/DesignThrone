@@ -67,6 +67,12 @@ int32_t vxe_split(vxe_project* project, uint64_t clip, double at, uint64_t* out_
 int32_t vxe_move(vxe_project* project, uint64_t clip, double start);
 int32_t vxe_remove(vxe_project* project, uint64_t clip, int32_t ripple);
 
+// Project files. vxe_last_error returns the reason for the most recent failure
+// on this thread, or an empty string when there is nothing to report.
+int32_t vxe_save(const vxe_project* project, const char* path);
+int32_t vxe_load(vxe_project* project, const char* path);
+const char* vxe_last_error(void);
+
 int32_t vxe_can_undo(const vxe_project* project);
 int32_t vxe_can_redo(const vxe_project* project);
 int32_t vxe_undo(vxe_project* project);

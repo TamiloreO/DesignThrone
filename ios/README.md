@@ -47,8 +47,9 @@ truth, so merge conflicts in project settings stay readable.
 - Speed is carried through the model but playback and export assume 1x.
 - Export uses `AVAssetExportPresetHighestQuality`, so the codec is whatever
   AVFoundation picks, which may be HEVC. Pinning H.264 needs the custom exporter.
-- No persistence yet: a relaunch starts an empty project, and imported media
-  stays in Application Support.
+- No persistence wired up yet. The engine can save and load a project through
+  `vxe_save` and `vxe_load`, but the app does not call them, so a relaunch still
+  starts an empty project.
 - `CompositionBuilder` is temporary. The Metal render pipeline replaces it rather
   than extending it, because effects, masks, and speed ramps cannot be expressed
   as AVFoundation layer instructions.

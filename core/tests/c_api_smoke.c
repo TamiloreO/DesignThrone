@@ -95,6 +95,23 @@ int main(void) {
     CHECK(vxe_copy_clips(project, clips, 4) == 2);
     CHECK(clips[1].start == 2.0);
 
+    /* Project files round trip through the same boundary the app uses. */
+    {
+        const char* path = "/tmp/vx_smoke.vxproj";
+        vxe_project* reopened = vxe_project_create();
+
+        CHECK(vxe_save(project, path) == VXE_OK);
+        CHECK(vxe_load(reopened, path) == VXE_OK);
+        CHECK(vxe_clip_count(reopened) == vxe_clip_count(project));
+        CHECK(vxe_duration(reopened) == vxe_duration(project));
+
+        CHECK(vxe_load(reopened, "/tmp/vx_smoke_missing.vxproj") != VXE_OK);
+        CHECK(vxe_last_error()[0] != '\0');
+        CHECK(vxe_save(NULL, path) == VXE_INVALID_ARGUMENT);
+
+        vxe_project_destroy(reopened);
+    }
+
     vxe_project_reset(project);
     CHECK(vxe_clip_count(project) == 0);
     CHECK(vxe_can_undo(project) == 0);

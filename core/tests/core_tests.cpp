@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "vx/model.hpp"
+#include "vx/project_io.hpp"
 #include "vx/timeline.hpp"
 #include "vx/time.hpp"
 
@@ -452,6 +453,137 @@ void testMulDivIsExactAndPortable() {
 #endif
 }
 
+void testProjectJsonRoundTripIsExact() {
+    Project project = makeProject();
+    project.name = "Round trip";
+
+    MediaItem media;
+    media.id = 1;
+    media.path = "Media/clip one.mov";
+    media.displayName = "clip \"one\"\nsecond line";
+    media.duration = Time::fromSeconds(12) + Time::fromNanoseconds(345678901);
+    media.width = 3840;
+    media.height = 2160;
+    media.frameRate = FrameRate(30000, 1001);
+    media.contentHash = "abc123";
+    project.media.push_back(media);
+
+    auto a = appendClip(project, kSeq, kVideoTrack, makeClip(0, 4));
+    CHECK(a.ok());
+    Clip odd = makeClip(0, 9);
+    odd.speedNumerator = 3;
+    odd.speedDenominator = 2;
+    odd.sourceIn = Time::fromNanoseconds(1234567);
+    odd.sourceOut = Time::fromNanoseconds(9000001234);
+    odd.name = "odd clip";
+    auto b = appendClip(a.project, kSeq, kVideoTrack, odd);
+    CHECK(b.ok());
+
+    const auto text = toJson(b.project);
+    const auto parsed = parseProjectJson(text);
+    CHECK(parsed.ok);
+    CHECK_EQ(parsed.error, std::string());
+
+    // Times have to come back as the same nanoseconds, not as a rounded second.
+    const auto& before = videoTrack(b.project).clips;
+    const auto& after = videoTrack(parsed.project).clips;
+    CHECK_EQ(after.size(), before.size());
+    for (std::size_t i = 0; i < before.size() && i < after.size(); ++i) {
+        CHECK_EQ(after[i].id, before[i].id);
+        CHECK_EQ(after[i].start.ns, before[i].start.ns);
+        CHECK_EQ(after[i].sourceIn.ns, before[i].sourceIn.ns);
+        CHECK_EQ(after[i].sourceOut.ns, before[i].sourceOut.ns);
+        CHECK_EQ(after[i].speedNumerator, before[i].speedNumerator);
+        CHECK_EQ(after[i].speedDenominator, before[i].speedDenominator);
+        CHECK_EQ(after[i].name, before[i].name);
+    }
+    CHECK_EQ(parsed.project.name, std::string("Round trip"));
+    CHECK_EQ(parsed.project.media.size(), std::size_t(1));
+    CHECK_EQ(parsed.project.media[0].duration.ns, media.duration.ns);
+    CHECK_EQ(parsed.project.media[0].displayName, media.displayName);
+    CHECK_EQ(parsed.project.media[0].width, 3840);
+    CHECK_EQ(parsed.project.media[0].frameRate.numerator, 30000);
+
+    // The text is stable, so a project that is loaded and saved does not churn.
+    CHECK_EQ(toJson(parsed.project), text);
+    CHECK(validate(parsed.project).ok());
+}
+
+void testProjectJsonRejectsBadInput() {
+    CHECK(!parseProjectJson("").ok);
+    CHECK(!parseProjectJson("{").ok);
+    CHECK(!parseProjectJson("[]").ok);
+    CHECK(!parseProjectJson("{\"format\":\"other\",\"version\":1}").ok);
+
+    // A newer schema is refused with an explanation, not guessed at.
+    const auto future = parseProjectJson(
+        "{\"format\":\"vx.project\",\"version\":99,\"sequences\":[{\"id\":1,\"tracks\":[]}]}");
+    CHECK(!future.ok);
+    CHECK(future.error.find("newer") != std::string::npos);
+
+    // Missing sequences is a broken project, not an empty one.
+    const auto empty = parseProjectJson("{\"format\":\"vx.project\",\"version\":1,\"sequences\":[]}");
+    CHECK(!empty.ok);
+
+    // Type errors name the field that is wrong.
+    const auto wrongType = parseProjectJson(
+        "{\"format\":\"vx.project\",\"version\":1,\"sequences\":[{\"id\":\"one\"}]}");
+    CHECK(!wrongType.ok);
+    CHECK(wrongType.error.find("id") != std::string::npos);
+
+    // Overlapping clips would corrupt the timeline, so the file is refused.
+    const auto overlap = parseProjectJson(
+        "{\"format\":\"vx.project\",\"version\":1,\"sequences\":[{\"id\":1,\"width\":1920,"
+        "\"height\":1080,\"frameRate\":{\"numerator\":30,\"denominator\":1},\"tracks\":[{\"id\":10,"
+        "\"kind\":\"video\",\"clips\":["
+        "{\"id\":2,\"media\":1,\"startNs\":0,\"sourceInNs\":0,\"sourceOutNs\":5000000000},"
+        "{\"id\":3,\"media\":1,\"startNs\":1000000000,\"sourceInNs\":0,\"sourceOutNs\":5000000000}"
+        "]}]}]}");
+    CHECK(!overlap.ok);
+}
+
+void testProjectJsonToleratesUnknownFieldsAndFixesIds() {
+    // A project saved by a later build with extra fields still opens, and the id
+    // counter is repaired so a new clip cannot collide with a loaded one.
+    const auto parsed = parseProjectJson(
+        "{\"format\":\"vx.project\",\"version\":1,\"name\":\"From the future\",\"nextId\":2,"
+        "\"colourSpace\":\"rec2020\","
+        "\"sequences\":[{\"id\":1,\"width\":1920,\"height\":1080,"
+        "\"frameRate\":{\"numerator\":30,\"denominator\":1},\"tracks\":[{\"id\":10,"
+        "\"kind\":\"video\",\"clips\":["
+        "{\"id\":40,\"media\":7,\"startNs\":0,\"sourceInNs\":0,\"sourceOutNs\":2000000000,"
+        "\"blendMode\":\"screen\"}]}]}]}");
+    CHECK(parsed.ok);
+    CHECK(parsed.project.nextId > 40);
+    CHECK_EQ(parsed.project.name, std::string("From the future"));
+    CHECK_EQ(videoTrack(parsed.project).clips.size(), std::size_t(1));
+
+    Project next = parsed.project;
+    Clip added = makeClip(0, 1);
+    const auto appended = appendClip(next, kSeq, kVideoTrack, added);
+    CHECK(appended.ok());
+    CHECK(videoTrack(appended.project).clips.size() == 2);
+}
+
+void testProjectFileRoundTrip() {
+    Project project = makeProject();
+    auto a = appendClip(project, kSeq, kVideoTrack, makeClip(0, 5));
+    CHECK(a.ok());
+
+    const std::string path = "/tmp/vx_round_trip.vxproj";
+    std::string error;
+    CHECK(saveProjectToFile(a.project, path, &error));
+    CHECK_EQ(error, std::string());
+
+    Project loaded;
+    CHECK(loadProjectFromFile(path, loaded, &error));
+    CHECK_EQ(videoTrack(loaded).clips.size(), std::size_t(1));
+    CHECK_EQ(videoTrack(loaded).clips[0].duration().ns, Time::fromSeconds(5).ns);
+
+    CHECK(!loadProjectFromFile("/tmp/vx_does_not_exist.vxproj", loaded, &error));
+    CHECK(!error.empty());
+}
+
 void testMoveRejectsOverlap() {
     Project project = makeProject();
     auto a = appendClip(project, kSeq, kVideoTrack, makeClip(0, 5));
@@ -561,6 +693,10 @@ int main() {
     RUN(testTrimStartClampsAtMediaHead);
     RUN(testSecondsDoubleRoundsSymmetrically);
     RUN(testMulDivIsExactAndPortable);
+    RUN(testProjectJsonRoundTripIsExact);
+    RUN(testProjectJsonRejectsBadInput);
+    RUN(testProjectJsonToleratesUnknownFieldsAndFixesIds);
+    RUN(testProjectFileRoundTrip);
     RUN(testMoveRejectsOverlap);
     RUN(testFailedEditLeavesProjectUntouched);
     RUN(testValidationCatchesOverlap);

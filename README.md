@@ -6,7 +6,7 @@ The App Store build comes first. Windows is a second front end over the same eng
 
 ## Status
 
-Planning is done and the engine is working: timeline model, edit operations, and undo/redo are implemented, exposed through a C ABI, and covered by 615 assertions plus a C-compiled ABI smoke test that pass on GCC with no compiler warnings.
+Planning is done and the engine is working: timeline model, edit operations, undo/redo, and a versioned project file format are implemented, exposed through a C ABI, and covered by 666 assertions plus a C-compiled ABI smoke test that pass on GCC with no compiler warnings.
 
 The iOS app is scaffolded in `ios/` and has never been compiled, because it was written on a machine without Xcode. Expect the first Mac build to need fixing. There is no renderer, no Windows shell, and no app binary or TestFlight build.
 
@@ -16,6 +16,7 @@ The iOS app is scaffolded in `ios/` and has never been compiled, because it was 
 - [docs/roadmap.md](docs/roadmap.md) - phased build plan with exit criteria
 - [docs/competitive-analysis.md](docs/competitive-analysis.md) - what CapCut, LumaFusion, Final Cut Pro, Resolve, Premiere, iMovie, VN, InShot, KineMaster, and Edits actually ship, and where the gaps are
 - [docs/architecture.md](docs/architecture.md) - repository layout, module boundaries, and the decisions behind them
+- [docs/project-format.md](docs/project-format.md) - the versioned JSON project manifest
 
 ## Repository layout
 

@@ -14,6 +14,7 @@ add_library(vxcore STATIC
   src/c_api.cpp
   src/time.cpp
   src/model.cpp
+  src/project_io.cpp
   src/timeline.cpp
 )
 

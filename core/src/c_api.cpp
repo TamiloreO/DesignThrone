@@ -1,8 +1,10 @@
 #include "vx/c_api.h"
 
+#include <string>
 #include <utility>
 
 #include "vx/model.hpp"
+#include "vx/project_io.hpp"
 #include "vx/timeline.hpp"
 
 using namespace vx;
@@ -75,6 +77,12 @@ std::int32_t apply(Document& document, EditResult result, std::uint64_t* outClip
     return VXE_OK;
 }
 
+}  // namespace
+
+namespace {
+thread_local std::string g_lastError;
+
+void setLastError(const std::string& message) { g_lastError = message; }
 }  // namespace
 
 struct vxe_project {
@@ -198,6 +206,32 @@ int32_t vxe_remove(vxe_project* project, uint64_t clip, int32_t ripple) {
                           : liftClip(project->document.project(), kSequence, kVideoTrack, clip);
     return apply(project->document, edit, nullptr);
 }
+
+int32_t vxe_save(const vxe_project* project, const char* path) {
+    if (project == nullptr || path == nullptr) return VXE_INVALID_ARGUMENT;
+    std::string error;
+    if (!saveProjectToFile(project->document.project(), path, &error)) {
+        setLastError(error);
+        return VXE_VALIDATION_FAILED;
+    }
+    setLastError("");
+    return VXE_OK;
+}
+
+int32_t vxe_load(vxe_project* project, const char* path) {
+    if (project == nullptr || path == nullptr) return VXE_INVALID_ARGUMENT;
+    Project loaded;
+    std::string error;
+    if (!loadProjectFromFile(path, loaded, &error)) {
+        setLastError(error);
+        return VXE_VALIDATION_FAILED;
+    }
+    project->document = Document(std::move(loaded));
+    setLastError("");
+    return VXE_OK;
+}
+
+const char* vxe_last_error(void) { return g_lastError.c_str(); }
 
 int32_t vxe_can_undo(const vxe_project* project) {
     if (project == nullptr) return 0;
