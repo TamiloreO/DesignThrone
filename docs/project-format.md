@@ -89,6 +89,19 @@ Notes on fields:
 - `media` entries describe footage, not edits. Clips reference them by `media`.
 - Frame rates are fractions for the same reason as speed: 29.97 is `30000/1001`.
 
+## Where the iOS app keeps projects and footage
+
+The working project is `Application Support/Projects/current.vxproj`. The app
+writes it to a temporary file and then replaces the previous one, so an
+interrupted save cannot leave a truncated project behind.
+
+Footage lives in `Application Support/Media/`, with each file named after the
+media id it belongs to, for example `Media/7.mov`. That is the whole mapping: a
+`media` entry's id is the file name, so a reopened project finds its footage
+without an index file that could drift out of sync. Footage the user removed
+from storage leaves its clips without a video source instead of pointing them at
+someone else's clip.
+
 ## Deliberately not in version 1
 
 Effects, keyframes, transitions, compound clips, adjustment layers, colour, and

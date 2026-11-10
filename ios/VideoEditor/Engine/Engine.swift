@@ -107,6 +107,25 @@ final class Engine {
     func redo() throws { try check(vxe_redo(handle)) }
     func reset() { vxe_project_reset(handle) }
 
+    // MARK: - Project files
+
+    /// Writes the whole project, every track and clip, to url.
+    func save(to url: URL) throws {
+        try check(vxe_save(handle, url.path))
+    }
+
+    /// Replaces the current project with the file at url. The undo history is
+    /// dropped, because an undo across a load would apply edits to a timeline
+    /// the user never saw.
+    func load(from url: URL) throws {
+        try check(vxe_load(handle, url.path))
+    }
+
+    /// The engine's explanation for the most recent save or load failure.
+    var lastErrorDetail: String {
+        String(cString: vxe_last_error())
+    }
+
     private func check(_ status: Int32) throws {
         if status != VXE_OK {
             throw EngineError.status(status)

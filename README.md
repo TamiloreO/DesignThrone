@@ -8,7 +8,9 @@ The App Store build comes first. Windows is a second front end over the same eng
 
 Planning is done and the engine is working: timeline model, edit operations, undo/redo, and a versioned project file format are implemented, exposed through a C ABI, and covered by 666 assertions plus a C-compiled ABI smoke test that pass on GCC with no compiler warnings.
 
-The iOS app is scaffolded in `ios/` and has never been compiled, because it was written on a machine without Xcode. Expect the first Mac build to need fixing. There is no renderer, no Windows shell, and no app binary or TestFlight build.
+The iOS app in `ios/` compiles. CI builds it for the iOS simulator on a macOS runner with XcodeGen and `xcodebuild`, next to a core test matrix on Ubuntu, macOS, and Windows. The app now reopens the last project, autosaving through the engine's own project file format after every edit.
+
+There is no Metal renderer, no Windows shell, and no signed app binary or TestFlight build.
 
 ## Documents
 
@@ -22,7 +24,7 @@ The iOS app is scaffolded in `ios/` and has never been compiled, because it was 
 
 ```
 core/       Portable C++20 editing engine: timeline model, edit operations, render graph
-ios/        SwiftUI app scaffold, generated Xcode project, Phase 0 pipeline
+ios/        SwiftUI app, XcodeGen project definition, Phase 0 pipeline
 windows/    Native Windows shell (later phase)
 docs/       Specifications, roadmap, and decision records
 ```

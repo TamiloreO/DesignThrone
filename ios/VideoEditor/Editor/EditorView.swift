@@ -6,6 +6,7 @@ struct EditorView: View {
     @StateObject private var model = EditorModel()
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var exportURL: URL?
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack {
@@ -31,6 +32,16 @@ struct EditorView: View {
                 Task {
                     await model.importItems(items)
                     pickerItems = []
+                }
+            }
+            .task {
+                await model.restoreLastProject()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                // The app can be killed while in the background, so this is the
+                // last certain moment to write the project out.
+                if phase != .active {
+                    model.saveNow()
                 }
             }
         }

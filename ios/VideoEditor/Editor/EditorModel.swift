@@ -23,12 +23,67 @@ final class EditorModel: ObservableObject {
     private let engine = Engine()
     private var nextMediaID: UInt64 = 1
     private var rebuildTask: Task<Void, Never>?
+    private var saveTask: Task<Void, Never>?
+    private var didRestore = false
 
     var duration: Double { engine.duration }
 
     var selectedClipValue: TimelineClip? {
         guard let selectedClip else { return nil }
         return clips.first { $0.id == selectedClip }
+    }
+
+    // MARK: - Persistence
+
+    /// Opens the working project from disk, once per launch.
+    ///
+    /// Footage is looked up by media id, so missing files leave those clips
+    /// without a video source instead of pointing at the wrong one.
+    func restoreLastProject() async {
+        guard !didRestore else { return }
+        didRestore = true
+
+        let url = ProjectStore.currentProjectURL
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+
+        do {
+            try engine.load(from: url)
+        } catch {
+            errorMessage = "Could not open the last project. \(engine.lastErrorDetail)"
+            return
+        }
+
+        clips = engine.clips
+        for id in Set(clips.map { $0.media }) {
+            guard let asset = await MediaStore.existingAsset(id: id) else { continue }
+            assets[asset.id] = asset
+        }
+
+        let highestMediaID = max(clips.map { $0.media }.max() ?? 0, assets.keys.max() ?? 0)
+        nextMediaID = highestMediaID + 1
+        await refresh()
+    }
+
+    /// Writes the project to disk.
+    ///
+    /// The manifest goes to a temporary file first and then replaces the real
+    /// one, so a crash mid-write cannot leave a half written project behind.
+    func saveNow() {
+        let target = ProjectStore.currentProjectURL
+        let temporary = target.appendingPathExtension("tmp")
+
+        do {
+            try ProjectStore.ensureDirectory()
+            try engine.save(to: temporary)
+            if FileManager.default.fileExists(atPath: target.path) {
+                _ = try FileManager.default.replaceItemAt(target, withItemAt: temporary)
+            } else {
+                try FileManager.default.moveItem(at: temporary, to: target)
+            }
+        } catch {
+            errorMessage = "Could not save the project. \(engine.lastErrorDetail)"
+            try? FileManager.default.removeItem(at: temporary)
+        }
     }
 
     // MARK: - Import
@@ -126,6 +181,17 @@ final class EditorModel: ObservableObject {
         }
         playhead = min(playhead, max(0, engine.duration))
         schedulePreviewRebuild()
+        scheduleAutosave()
+    }
+
+    /// Saves shortly after the last edit, so a burst of drags writes once.
+    private func scheduleAutosave() {
+        saveTask?.cancel()
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled else { return }
+            self?.saveNow()
+        }
     }
 
     private func schedulePreviewRebuild() {
