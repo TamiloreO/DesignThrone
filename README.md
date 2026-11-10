@@ -6,7 +6,9 @@ The App Store build comes first. Windows is a second front end over the same eng
 
 ## Status
 
-Planning is done and the engine skeleton is working: timeline model, edit operations, and undo/redo are implemented and covered by 615 assertions that pass on GCC, with no compiler warnings. The iOS app, the renderer, and the Windows shell do not exist yet, so there is no app binary or TestFlight build.
+Planning is done and the engine is working: timeline model, edit operations, and undo/redo are implemented, exposed through a C ABI, and covered by 615 assertions plus a C-compiled ABI smoke test that pass on GCC with no compiler warnings.
+
+The iOS app is scaffolded in `ios/` and has never been compiled, because it was written on a machine without Xcode. Expect the first Mac build to need fixing. There is no renderer, no Windows shell, and no app binary or TestFlight build.
 
 ## Documents
 
@@ -19,7 +21,7 @@ Planning is done and the engine skeleton is working: timeline model, edit operat
 
 ```
 core/       Portable C++20 editing engine: timeline model, edit operations, render graph
-ios/        SwiftUI app (added when the Xcode project is scaffolded)
+ios/        SwiftUI app scaffold, generated Xcode project, Phase 0 pipeline
 windows/    Native Windows shell (later phase)
 docs/       Specifications, roadmap, and decision records
 ```
@@ -34,6 +36,8 @@ ctest --test-dir build --output-on-failure
 ```
 
 The core has no platform dependencies and no external libraries, so it builds on macOS, Windows, and Linux. CI runs the same suite on all three, in Debug and Release.
+
+Apps talk to the core through `core/include/vx/c_api.h`, a plain C ABI. That keeps Swift and the future Windows front end free of C++ interop, and lets the C++ internals change without touching either app.
 
 ## Constraints that shape the design
 
