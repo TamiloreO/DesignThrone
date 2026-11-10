@@ -1,0 +1,53 @@
+name: Core tests
+
+# The editing core is plain C++20 with no platform dependencies, so it can be
+# verified on all three toolchains that matter before any UI exists. This does
+# not build or test the iOS or Windows apps; those need Xcode and MSBuild.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} (${{ matrix.build_type }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+        build_type: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S core -B core/build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      - name: Build
+        run: cmake --build core/build --config ${{ matrix.build_type }}
+
+      - name: Test
+        run: ctest --test-dir core/build -C ${{ matrix.build_type }} --output-on-failure
+
+  ios-build:
+    name: iOS simulator build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: cd ios && xcodegen generate
+
+      - name: Build for simulator
+        run: |
+          xcodebuild \
+            -project ios/VideoEditor.xcodeproj \
+            -scheme VideoEditor \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
