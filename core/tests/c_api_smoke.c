@@ -97,19 +97,27 @@ int main(void) {
 
     /* Project files round trip through the same boundary the app uses. */
     {
-        const char* path = "/tmp/vx_smoke.vxproj";
+        /* Relative to the working directory CTest runs in. A hardcoded /tmp
+         * does not exist on Windows, which turned this into a failed save
+         * rather than a test of the file format. */
+        const char* path = "vx_smoke.vxproj";
         vxe_project* reopened = vxe_project_create();
 
         CHECK(vxe_save(project, path) == VXE_OK);
-        CHECK(vxe_load(reopened, path) == VXE_OK);
-        CHECK(vxe_clip_count(reopened) == vxe_clip_count(project));
-        CHECK(vxe_duration(reopened) == vxe_duration(project));
+        if (vxe_load(reopened, path) != VXE_OK) {
+            printf("  FAIL %s:%d: vxe_load said: %s\n", __FILE__, __LINE__, vxe_last_error());
+            ++g_failures;
+        } else {
+            CHECK(vxe_clip_count(reopened) == vxe_clip_count(project));
+            CHECK(vxe_duration(reopened) == vxe_duration(project));
+        }
 
-        CHECK(vxe_load(reopened, "/tmp/vx_smoke_missing.vxproj") != VXE_OK);
+        CHECK(vxe_load(reopened, "vx_smoke_missing.vxproj") != VXE_OK);
         CHECK(vxe_last_error()[0] != '\0');
         CHECK(vxe_save(NULL, path) == VXE_INVALID_ARGUMENT);
 
         vxe_project_destroy(reopened);
+        remove(path);
     }
 
     vxe_project_reset(project);

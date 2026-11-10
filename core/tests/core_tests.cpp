@@ -2,6 +2,7 @@
 // to build and test on any machine, including CI runners with nothing installed.
 
 #include <cstdio>
+#include <filesystem>
 #include <limits>
 #include <string>
 #include <vector>
@@ -16,6 +17,13 @@ namespace {
 int g_failures = 0;
 int g_checks = 0;
 const char* g_currentTest = "";
+
+// A scratch path next to the platform's temp directory. Hardcoding /tmp made
+// these tests write nowhere on Windows, so the follow-up assertions read an
+// empty project, which crashed instead of reporting a clear failure.
+std::string scratchPath(const char* name) {
+    return (std::filesystem::temp_directory_path() / name).string();
+}
 
 void reportFailure(const char* file, int line, const std::string& message) {
     ++g_failures;
@@ -570,18 +578,32 @@ void testProjectFileRoundTrip() {
     auto a = appendClip(project, kSeq, kVideoTrack, makeClip(0, 5));
     CHECK(a.ok());
 
-    const std::string path = "/tmp/vx_round_trip.vxproj";
+    const std::string path = scratchPath("vx_round_trip.vxproj");
     std::string error;
-    CHECK(saveProjectToFile(a.project, path, &error));
+
+    // Every check below depends on the save working, so bail out with the
+    // engine's own explanation instead of reading a project that was never
+    // written.
+    if (!saveProjectToFile(a.project, path, &error)) {
+        reportFailure(__FILE__, __LINE__, "could not save to " + path + ": " + error);
+        return;
+    }
     CHECK_EQ(error, std::string());
 
     Project loaded;
-    CHECK(loadProjectFromFile(path, loaded, &error));
+    const bool reloaded = loadProjectFromFile(path, loaded, &error);
+    if (!reloaded) {
+        reportFailure(__FILE__, __LINE__, "could not load from " + path + ": " + error);
+        return;
+    }
     CHECK_EQ(videoTrack(loaded).clips.size(), std::size_t(1));
     CHECK_EQ(videoTrack(loaded).clips[0].duration().ns, Time::fromSeconds(5).ns);
 
-    CHECK(!loadProjectFromFile("/tmp/vx_does_not_exist.vxproj", loaded, &error));
+    CHECK(!loadProjectFromFile(scratchPath("vx_does_not_exist.vxproj"), loaded, &error));
     CHECK(!error.empty());
+
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored);
 }
 
 void testMoveRejectsOverlap() {
