@@ -1,8 +1,9 @@
 name: Core tests
 
 # The editing core is plain C++20 with no platform dependencies, so it can be
-# verified on all three toolchains that matter before any UI exists. This does
-# not build or test the iOS or Windows apps; those need Xcode and MSBuild.
+# verified on all three toolchains that matter before any UI exists. The
+# ios-build job at the end compiles the Swift app and the core it embeds;
+# that is the only automated check the app itself has.
 on:
   push:
     branches: [main]
@@ -13,10 +14,13 @@ jobs:
   test:
     name: ${{ matrix.os }} (${{ matrix.build_type }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-14, windows-latest]
+        # macos-14 no longer resolves to a runner for this account, so the
+        # macOS leg uses macos-15, which also hosts the iOS build below.
+        os: [ubuntu-latest, macos-15, windows-latest]
         build_type: [Debug, Release]
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +37,7 @@ jobs:
   ios-build:
     name: iOS simulator build
     runs-on: macos-15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -48,6 +53,6 @@ jobs:
             -project ios/VideoEditor.xcodeproj \
             -scheme VideoEditor \
             -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination "generic/platform=iOS Simulator" \
             CODE_SIGNING_ALLOWED=NO \
             build
