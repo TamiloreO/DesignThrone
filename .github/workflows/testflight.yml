@@ -1,0 +1,169 @@
+name: TestFlight
+
+# Builds a signed archive and uploads it to App Store Connect, so the app can be
+# installed from TestFlight on a phone without a Mac anywhere in the loop.
+#
+# Manual only. Every run becomes a build that testers can install, so it does
+# not belong on every push. Run it from the Actions tab, or push a v* tag.
+#
+# Required repository secrets (see docs/testflight.md):
+#   APPLE_TEAM_ID   ten character Apple Developer team id
+#   ASC_KEY_ID      App Store Connect API key id
+#   ASC_ISSUER_ID   issuer id shown next to that key
+#   ASC_KEY_P8      contents of the AuthKey_XXXX.p8 file, or that file base64ed
+
+on:
+  workflow_dispatch:
+    inputs:
+      marketing_version:
+        description: "Version string, for example 0.1.0"
+        required: true
+        default: "0.1.0"
+      build_number:
+        description: "Build number. Leave empty to use the workflow run number."
+        required: false
+        default: ""
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: Archive and upload
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the signing secrets
+        run: |
+          missing=0
+          for name in APPLE_TEAM_ID ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret $name is not set. See docs/testflight.md."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Select Xcode 26
+        run: |
+          # App Store uploads have required the iOS 26 SDK since April 2026, and
+          # the default Xcode on this image is older, so pick 26 explicitly.
+          # Xcode 26.3 ships the iOS 26.2 SDK.
+          XCODE_APP=/Applications/Xcode_26.3.app
+          if [ ! -d "$XCODE_APP" ]; then
+            XCODE_APP="$(ls -d /Applications/Xcode_26*.app | tail -1)"
+          fi
+          sudo xcode-select -s "$XCODE_APP"
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate the project
+        run: cd ios && xcodegen generate
+
+      - name: Resolve the version and build number
+        id: version
+        run: |
+          marketing="${{ inputs.marketing_version }}"
+          if [ -z "$marketing" ]; then
+            marketing="0.1.0"
+          fi
+          build="${{ inputs.build_number }}"
+          if [ -z "$build" ]; then
+            build="${GITHUB_RUN_NUMBER}"
+          fi
+          echo "marketing=$marketing" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+
+      - name: Write the App Store Connect key
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          KEY_PATH="$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
+          export KEY_PATH
+          # A pasted .p8 keeps its PEM header. Anything else is treated as the
+          # base64 encoding of the file, which survives copy and paste better.
+          if printf '%s' "$ASC_KEY_P8" | grep -q "BEGIN PRIVATE KEY"; then
+            printf '%s\n' "$ASC_KEY_P8" > "$KEY_PATH"
+          else
+            python3 -c "import base64, os; open(os.environ['KEY_PATH'], 'wb').write(base64.b64decode(os.environ['ASC_KEY_P8']))"
+          fi
+          chmod 600 "$KEY_PATH"
+          echo "KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Archive
+        run: |
+          xcodebuild archive \
+            -project ios/VideoEditor.xcodeproj \
+            -scheme VideoEditor \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/VideoEditor.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            MARKETING_VERSION="${{ steps.version.outputs.marketing }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.version.outputs.build }}" \
+            CODE_SIGN_STYLE=Automatic
+
+      - name: Write the export options
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>destination</key>
+            <string>upload</string>
+            <key>teamID</key>
+            <string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key>
+            <string>automatic</string>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>manageAppVersionAndBuildNumber</key>
+            <false/>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Export and upload to App Store Connect
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/VideoEditor.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: Summarise the upload
+        if: success()
+        run: |
+          {
+            echo "### Uploaded to App Store Connect"
+            echo ""
+            echo "- Version: ${{ steps.version.outputs.marketing }}"
+            echo "- Build: ${{ steps.version.outputs.build }}"
+            echo "- Bundle id: com.tamiloreo.videoeditor"
+            echo ""
+            echo "Processing usually takes 5 to 15 minutes. Then open TestFlight in"
+            echo "App Store Connect and add yourself under Internal Testing."
+          } >> "$GITHUB_STEP_SUMMARY"
