@@ -41,6 +41,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Select Xcode 26
+        run: |
+          # The default Xcode on this image is older than the one App Store
+          # uploads require, so compile against the shipping toolchain.
+          XCODE_APP=/Applications/Xcode_26.3.app
+          if [ ! -d "$XCODE_APP" ]; then
+            XCODE_APP="$(ls -d /Applications/Xcode_26*.app | tail -1)"
+          fi
+          sudo xcode-select -s "$XCODE_APP"
+          xcodebuild -version
+
       - name: Install XcodeGen
         run: brew install xcodegen
 
