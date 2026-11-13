@@ -20,6 +20,10 @@ settings:
     CLANG_CXX_LIBRARY: libc++
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     SWIFT_STRICT_CONCURRENCY: minimal
+    # The TestFlight workflow overrides both of these on the command line, so
+    # the values here only matter for local builds.
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
 
 targets:
   VideoEditor:
@@ -42,6 +46,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_PREVIEWS: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     scheme:
       testTargets: []
       gatherCoverageData: false

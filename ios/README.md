@@ -46,6 +46,17 @@ truth, so merge conflicts in project settings stay readable.
   one working project: edits autosave through `vxe_save` about half a second
   after the last change, the app saves again when it leaves the foreground,
   and a relaunch reopens the timeline through `vxe_load`.
+- `Assets.xcassets` carries the app icon, drawn by `tools/make_app_icon.py` so it
+  can be regenerated instead of edited as a binary. `PrivacyInfo.xcprivacy`
+  declares no tracking, no collected data, and no required-reason APIs.
+
+## Distribution
+
+TestFlight uploads run in GitHub Actions, not from a Mac. `.github/workflows/testflight.yml`
+archives, signs with an App Store Connect API key, and uploads to App Store
+Connect. The account setup it needs is in `../docs/testflight.md`. Until that
+setup exists, the workflow fails at its first step with a message naming the
+missing secret.
 
 ## Known gaps, on purpose
 

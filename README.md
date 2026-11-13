@@ -10,7 +10,9 @@ Planning is done and the engine is working: timeline model, edit operations, und
 
 The iOS app in `ios/` compiles. CI builds it for the iOS simulator on a macOS runner with XcodeGen and `xcodebuild`, next to a core test matrix on Ubuntu, macOS, and Windows. The app now reopens the last project, autosaving through the engine's own project file format after every edit.
 
-There is no Metal renderer, no Windows shell, and no signed app binary or TestFlight build.
+Distribution is a GitHub Actions pipeline that archives, signs, and uploads to App Store Connect, so no Mac is needed at any point. It is wired but unproven: it cannot run until the Apple Developer Program enrolment, the app record, and the API key exist. See [docs/testflight.md](docs/testflight.md).
+
+There is no Metal renderer, no Windows shell, and no build in TestFlight yet.
 
 ## Documents
 
@@ -19,6 +21,7 @@ There is no Metal renderer, no Windows shell, and no signed app binary or TestFl
 - [docs/competitive-analysis.md](docs/competitive-analysis.md) - what CapCut, LumaFusion, Final Cut Pro, Resolve, Premiere, iMovie, VN, InShot, KineMaster, and Edits actually ship, and where the gaps are
 - [docs/architecture.md](docs/architecture.md) - repository layout, module boundaries, and the decisions behind them
 - [docs/project-format.md](docs/project-format.md) - the versioned JSON project manifest
+- [docs/testflight.md](docs/testflight.md) - what has to exist in App Store Connect, and how the upload pipeline works
 
 ## Repository layout
 
