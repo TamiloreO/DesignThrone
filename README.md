@@ -1,4 +1,4 @@
-# Video Editor (working title)
+# DesignThrone
 
 A professional-grade video editor for iPhone, iPad, and later Windows. Native UI on each platform over one shared, portable editing engine.
 
@@ -8,7 +8,7 @@ The App Store build comes first. Windows is a second front end over the same eng
 
 Planning is done and the engine is working: timeline model, edit operations, undo/redo, and a versioned project file format are implemented, exposed through a C ABI, and covered by 666 assertions plus a C-compiled ABI smoke test that pass on GCC with no compiler warnings.
 
-The iOS app in `ios/` compiles. CI builds it for the iOS simulator on a macOS runner with XcodeGen and `xcodebuild`, next to a core test matrix on Ubuntu, macOS, and Windows. The app now reopens the last project, autosaving through the engine's own project file format after every edit.
+The iOS app in `ios/` (target names still read VideoEditor) compiles. CI builds it for the iOS simulator on a macOS runner with XcodeGen and `xcodebuild`, next to a core test matrix on Ubuntu, macOS, and Windows. The app now reopens the last project, autosaving through the engine's own project file format after every edit.
 
 Distribution is a GitHub Actions pipeline that archives, signs, and uploads to App Store Connect, so no Mac is needed at any point. It is wired but unproven: it cannot run until the Apple Developer Program enrolment, the app record, and the API key exist. See [docs/testflight.md](docs/testflight.md).
 
